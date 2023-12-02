@@ -1,24 +1,15 @@
 from typing import List, Tuple
+from re import findall
 
-def part_one(codes: List[str]) -> int: ########## clean up with regex
+def part_one(codes: List[str]) -> int:
     sum = 0
     for code in codes:
-        firstDigit, lastDigit = None, None
-        index = 0
-        while not firstDigit:
-            if code[index].isdigit():
-                firstDigit = int(code[index])
-            index += 1
-        index = len(code) - 1
-        while not lastDigit:
-            if code[index].isdigit():
-                lastDigit = int(code[index])
-            index -= 1
-        sum += (firstDigit * 10) + lastDigit
+        digits = findall("\d", code)
+        sum += int(digits[0] + digits[-1])
     return sum
 
 
-def part_two(codes: List[str]) -> int:
+def part_two_trie(codes: List[str]) -> int:
     digits = [("one", 1), ("two", 2), ("three", 3), ("four", 4), 
               ("five", 5), ("six", 6), ("seven", 7), ("eight", 8), 
               ("nine", 9), ('1', 1), ('2', 2), ('3', 3), ('4', 4), 
@@ -71,13 +62,32 @@ class Trie:
 
 
 ##########################################################################
+def part_two_re(codes: List[str]) -> int:
+    writtenDigits = ["one", "two", "three", "four", "five", 
+              "six", "seven", "eight", "nine"]
+    reg = "(?=(" + '|'.join(writtenDigits) + "|\\d))"
+    sum = 0
+    for code in codes:
+        digits = findall(reg, code)
+        sum += (10 * digitStrToInt(digits[0], writtenDigits)) \
+                + digitStrToInt(digits[-1], writtenDigits)
+    return sum
+
+def digitStrToInt(digit: str, writtenDigits: List[str]) -> int:
+    if len(digit) == 1:
+        return int(digit)
+    else:
+        return writtenDigits.index(digit) + 1
+
+
+################################ TESTING #################################
 testInput1 = ["1abc2", "pqr3stu8vwx", "a1b2c3d4e5f", "treb7uchet"]
 print(part_one(testInput1))
 testInput2 = ["two1nine", "eightwothree", "abcone2threexyz", "xtwone3four", 
               "4nineeightseven2", "zoneight234", "7pqrstsixteen"]
-print(part_two(testInput2))
+print(part_two_re(testInput2))
 
 with open("input.txt", 'r') as file:
     fileInput = file.read().split()
     print(part_one(fileInput))
-    print(part_two(fileInput))
+    print(part_two_re(fileInput))
