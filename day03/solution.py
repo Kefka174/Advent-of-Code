@@ -7,11 +7,26 @@ def part_one(schematic: List[str]) -> int:
         for col in range(len(schematic[row])):
             if (not schematic[row][col].isalnum() 
                 and not schematic[row][col] == '.'):
-                numericNeighbors = checkNeighbors(row, col, str.isdigit, schematic)
-                for neighbor in numericNeighbors:
+                for neighbor in checkNeighbors(row, col, str.isdigit, schematic):
                     if schematic[neighbor[0]][neighbor[1]] != '.':
                         sum += removeNumberFromList(schematic[neighbor[0]], neighbor[1])
     return sum
+
+def part_two(schematic: List[str]) -> int:
+    schematic = [list(string) for string in schematic]
+    sum = 0
+    for row in range(len(schematic)):
+        for col in range(len(schematic[row])):
+            if schematic[row][col] == '*':
+                gearValues = []
+                for neighbor in checkNeighbors(row, col, str.isdigit, schematic):
+                    if schematic[neighbor[0]][neighbor[1]] != '.':
+                        gearValues.append(removeNumberFromList(schematic[neighbor[0]], neighbor[1]))
+                
+                if len(gearValues) == 2:
+                    sum += gearValues[0] * gearValues[1]
+    return sum
+
 
 def checkNeighbors(row: int, col: int, isValidNeighbor: Callable[[str], bool], 
                    matrix: List[List[str]]) -> List[Tuple[int, int]]:
@@ -57,7 +72,9 @@ testInput = ["467..114..",
              "...$.*....", 
              ".664.598.."]
 print("Part 1 test input:", part_one(testInput))
+print("Part 2 test input:", part_two(testInput))
 
 with open("input.txt", 'r') as file:
     fileInput = file.read().split('\n')
     print("Part 1 file input:", part_one(fileInput))
+    print("Part 2 file input:", part_two(fileInput))
