@@ -12,11 +12,11 @@ def part_two(inputData: str) -> int:
     pipeMap = [[*line.strip()] for line in inputData.split('\n')]
     start = findAndReplaceStart(pipeMap)
 
-    loopPipes = [start]
+    loopPipes = []
     traversePipeLoop(start, pipeMap, lambda x: loopPipes.append(x))
 
     tilesOutsideLoop = floodFillFromBorder(pipeMap, set(loopPipes))
-    return (len(pipeMap) * len(pipeMap[1])) - (tilesOutsideLoop + len(loopPipes))
+    return (len(pipeMap) * len(pipeMap[0])) - (tilesOutsideLoop + len(loopPipes))
 
 
 DIRECTIONS = ["right", "down", "left", "up"]
@@ -59,8 +59,8 @@ def traversePipeLoop(start: Tuple[int, int], pipeMap: List[List[str]],
     nextDirection = PIPE_DIRECTIONS[pipeMap[start[0]][start[1]]][0]
     currentPipe = getCoordsFromDirection(start, nextDirection)
     while currentPipe != start:
-        func(currentPipe)
         nextDirection = getNextDirection(pipeMap[currentPipe[0]][currentPipe[1]], nextDirection)
+        func(currentPipe)
         currentPipe = getCoordsFromDirection(currentPipe, nextDirection)
     func(start)
 
@@ -99,29 +99,48 @@ def getCoordsFromDirection(startCoords: Tuple[int, int], direction: str) -> Tupl
 # Floodfills a matrix with 'X' from the borders and returns the number of tiles filled
 # Will squeeze and fill through adjacent pipe gaps
 def floodFillFromBorder(pipeMap: List[List[str]], tilesToIgnore: Set[Tuple[int, int]]) -> int:
-    # counter = 0
-    # for border tiles
-        # if not 'X' add to queue
+    numTilesFilled = 0
+    for borderTile in ([(0, x) for x in range(len(pipeMap[0]))] + 
+                       [(len(pipeMap) - 1, x) for x in range(len(pipeMap[0]))] +
+                       [(x, 0) for x in range(1, len(pipeMap) - 1)] + 
+                       [(x, len(pipeMap[0]) - 1) for x in range(1, len(pipeMap) - 1)]):
+        tilesToFill = set()
+        if (pipeMap[borderTile[0]][borderTile[1]] != 'X' 
+            and borderTile not in tilesToIgnore):
+            tilesToFill.add(borderTile)
+        
+        while tilesToFill:
+            currentPipe = tilesToFill.pop()
+            pipeMap[currentPipe[0]][currentPipe[1]] = 'X'
+            numTilesFilled += 1
 
-        # while queue:
-            # currentPipe = queue.pop
-            # for neighbor
-                # if neighbor not 'X'
-                    # if neighbor in tilesToIgnore:
-                        # squeezeAroundLoop
-                    # else:
-                        # add to queue
-                        # increment counter
-    tilesTouchingLoop = squeezeAroundLoop((1,1), pipeMap, tilesToIgnore) #------------------------
-    return 0
+            relativeCoords = (0, 1)
+            for _ in range(4):
+                neighbor = (currentPipe[0] + relativeCoords[0], currentPipe[1] + relativeCoords[1])
+                neighborIsInBounds = (neighbor[0] >= 0 and neighbor[0] < len(pipeMap) 
+                                    and neighbor[1] >= 0 and neighbor[1] < len(pipeMap[0]))
+                if neighborIsInBounds and pipeMap[neighbor[0]][neighbor[1]] != 'X':
+                    if neighbor in tilesToIgnore:
+                        tilesToFill.update(squeezeAroundLoop(neighbor, pipeMap, tilesToIgnore))
+                    else:
+                        tilesToFill.add(neighbor)
+
+                relativeCoords = (relativeCoords[1], -relativeCoords[0])
+    return numTilesFilled
     
 # Returns a set of tiles that border one side of a pipe loop
 def squeezeAroundLoop(startCoords: Tuple[int, int], pipeMap: List[List[str]], 
                       tilesToIgnore: Set[Tuple[int, int]]) -> Set[Tuple[int, int]]:
     sideOfPipe = [startingSide(startCoords, pipeMap)] # TODO: wrap in mutable object
+    pipeShape = pipeMap[startCoords[0]][startCoords[1]]
+    # coupled to loop traversal's initial direction being PIPE_DIRECTIONS[pipe][0]
+    if sideOfPipe[0] == DIRECTION_INVERSES[PIPE_DIRECTIONS[pipeShape][0]]:
+        sideOfPipe = [getNextDirection(pipeShape, sideOfPipe[0], True)]
+    
     tilesTouchingLoop = set()
     def addSqueezedNeighborsToSet(pipeCoords):
         pipeShape = pipeMap[pipeCoords[0]][pipeCoords[1]]
+        pipeMap[pipeCoords[0]][pipeCoords[1]] = 'X'
         nextSide = getNextDirection(pipeShape, sideOfPipe[0], True)
         if nextSide:
             sideOfPipe[0] = nextSide
@@ -138,15 +157,16 @@ def squeezeAroundLoop(startCoords: Tuple[int, int], pipeMap: List[List[str]],
             # TODO: make neighborIsInBounds a function
             neighborIsInBounds = (neighbor[0] >= 0 and neighbor[0] < len(pipeMap) 
                               and neighbor[1] >= 0 and neighbor[1] < len(pipeMap[0]))
-            if neighborIsInBounds and neighbor not in tilesToIgnore:
+            if (neighborIsInBounds and pipeMap[neighbor[0]][neighbor[1]] != 'X' 
+                and neighbor not in tilesToIgnore):
                 tilesTouchingLoop.add(neighbor)
 
-    traversePipeLoop(startCoords, pipeMap, lambda coords: addSqueezedNeighborsToSet(coords))
+    traversePipeLoop(startCoords, pipeMap, addSqueezedNeighborsToSet)
     return tilesTouchingLoop
 
 ###############################TODO: Merge neighbor checking with findAndReplaceStart and floodFill
 def startingSide(startCoords: Tuple[int, int], pipeMap: List[List[str]]) -> Tuple[str, str]:
-    relativeCoords, diagIndex = (0, 1), 0
+    relativeCoords, diagIndex = (0, 1), 0 #----------- TODO: rename diagIndex
     for _ in range(4):
         neighbor = (startCoords[0] + relativeCoords[0], startCoords[1] + relativeCoords[1])
         neighborIsInBounds = (neighbor[0] >= 0 and neighbor[0] < len(pipeMap) 
@@ -183,15 +203,15 @@ testInput3 = """...........
                 .|..|.|..|.
                 .L--J.L--J.
                 ..........."""
-testInput4 = """..........
-                .S------7.
-                .|F----7|.
-                .||....||.
-                .||....||.
-                .|L-7F-J|.
-                .|..||..|.
-                .L--JL--J.
-                .........."""
+testInput4 = """.........
+                S------7.
+                |F----7|.
+                ||....||.
+                ||....||.
+                |L-7F-J|.
+                |..||..|.
+                L--JL--J.
+                ........."""
 testInput5 = """.F----7F7F7F7F-7....
                 .|F--7||||||||FJ....
                 .||.FJ||||||||L7....
@@ -214,7 +234,11 @@ testInput6 = """FF7FSF7F7F7F7F7F---7
                 L7JLJL-JLJLJL--JLJ.L"""
 
 print("Part 2 first test input:", part_two(testInput3)) # expect 4
+print("Part 2 second test input:", part_two(testInput4)) # expect 4
+print("Part 2 third test input:", part_two(testInput5)) # expect 8
+print("Part 2 fourth test input:", part_two(testInput6)) # expect 10
 
 with open("input.txt", 'r') as file:
     fileInput = file.read()
-    # print("Part 1 file input:", part_one(fileInput))
+    print("Part 1 file input:", part_one(fileInput))
+    print("Part 2 file input:", part_two(fileInput))
