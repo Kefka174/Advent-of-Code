@@ -15,8 +15,8 @@ def part_two(inputData: str) -> int:
     loopPipes = []
     traversePipeLoop(start, pipeMap, lambda x: loopPipes.append(x))
 
-    tilesOutsideLoop = floodFillFromBorder(pipeMap, set(loopPipes))
-    return (len(pipeMap) * len(pipeMap[0])) - (tilesOutsideLoop + len(loopPipes))
+    numTilesOutsideLoop = floodFillFromBorder(pipeMap, set(loopPipes))
+    return (len(pipeMap) * len(pipeMap[0])) - (numTilesOutsideLoop + len(loopPipes))
 
 
 DIRECTIONS = ["right", "down", "left", "up"]
@@ -29,22 +29,14 @@ SQUEEZE_DIRECTIONS = {'L': ("left", "down"), 'J': ("down", "right"),
 # Finds the start 'S' in a pipeMap and replaces it with the appropriate pipe
 # Returns the starting coordinates and the directions of its connected pipes
 def findAndReplaceStart(pipeMap: List[List[str]]) -> Tuple[int, int]:
-    startCoords = [(rowNum, row.index('S')) for rowNum, row in enumerate(pipeMap) 
-                   if 'S' in row][0]
-    connectedPipeDirections = set()
-    relativeCoords, directionIndex = (0, 1), 0
-    for _ in range(4): # coupled to directions order [right, down, left, up]
-        neighbor = (startCoords[0] + relativeCoords[0], startCoords[1] + relativeCoords[1])
-        neighborIsInBounds = (neighbor[0] >= 0 and neighbor[0] < len(pipeMap) 
-                              and neighbor[1] >= 0 and neighbor[1] < len(pipeMap[0]))
-        nextDirection = getNextDirection(pipeMap[neighbor[0]][neighbor[1]], 
-                                         DIRECTIONS[directionIndex])
-
-        if neighborIsInBounds and nextDirection is not None:
-            connectedPipeDirections.add(DIRECTIONS[directionIndex])
-
-        relativeCoords = (relativeCoords[1], -relativeCoords[0])
-        directionIndex += 1
+    startCoords = [(rowNum, row.index('S')) for rowNum, row in enumerate(pipeMap) if 'S' in row][0]
+    connectedPipeDirections, dirIndex = set(), 0
+    def appendConnectedNeighbors(neighbor: Tuple[int, int]) -> None:
+        nonlocal dirIndex # coupled to directions order [right, down, left, up]
+        if getNextSideOfPipe(pipeMap[neighbor[0]][neighbor[1]], DIRECTIONS[dirIndex]):
+            connectedPipeDirections.add(DIRECTIONS[dirIndex])
+        dirIndex += 1
+    callFuncOnNeighbors(startCoords, pipeMap, appendConnectedNeighbors)
 
     for pipe in PIPE_DIRECTIONS.items():
         if set(pipe[1]) == connectedPipeDirections:
@@ -55,46 +47,56 @@ def findAndReplaceStart(pipeMap: List[List[str]]) -> Tuple[int, int]:
 # Calls the given function on each pipe of a pipe loop
 def traversePipeLoop(start: Tuple[int, int], pipeMap: List[List[str]], 
                      func: Callable[..., None]) -> None:
-    # TODO: better mimic of do-while
     nextDirection = PIPE_DIRECTIONS[pipeMap[start[0]][start[1]]][0]
     currentPipe = getCoordsFromDirection(start, nextDirection)
     while currentPipe != start:
-        nextDirection = getNextDirection(pipeMap[currentPipe[0]][currentPipe[1]], nextDirection)
+        nextDirection = getNextSideOfPipe(pipeMap[currentPipe[0]][currentPipe[1]], nextDirection)
         func(currentPipe)
         currentPipe = getCoordsFromDirection(currentPipe, nextDirection)
     func(start)
 
 # Returns the Direction a pipe leads given the direction used to travel to that pipe
 # or the next side of the pipe after squeezing around it
-def getNextDirection(pipe: str, directionTraveledIn: str, squeezingAroundPipe: bool = False) -> str:
+def getNextSideOfPipe(pipeShape: str, directionTraveledIn: str, squeezingAroundPipe: bool = False) -> str:
     nextDirection = None
-    if pipe in PIPE_DIRECTIONS:
+    if pipeShape in PIPE_DIRECTIONS:
         directionApproachedFrom = directionTraveledIn
         if not squeezingAroundPipe:
             directionApproachedFrom = DIRECTION_INVERSES[directionTraveledIn]
 
-        # TODO: simplify
-        if PIPE_DIRECTIONS[pipe][0] == directionApproachedFrom:
-            nextDirection = PIPE_DIRECTIONS[pipe][1]
-        elif PIPE_DIRECTIONS[pipe][1] == directionApproachedFrom:
-            nextDirection = PIPE_DIRECTIONS[pipe][0]
-        elif squeezingAroundPipe:
-            if PIPE_DIRECTIONS[pipe][0] == DIRECTION_INVERSES[directionApproachedFrom]:
-                nextDirection = DIRECTION_INVERSES[PIPE_DIRECTIONS[pipe][1]]
-            elif PIPE_DIRECTIONS[pipe][1] == DIRECTION_INVERSES[directionApproachedFrom]:
-                nextDirection = DIRECTION_INVERSES[PIPE_DIRECTIONS[pipe][0]]
+        if PIPE_DIRECTIONS[pipeShape][0] == directionApproachedFrom:
+            nextDirection = PIPE_DIRECTIONS[pipeShape][1]
+        elif PIPE_DIRECTIONS[pipeShape][1] == directionApproachedFrom:
+            nextDirection = PIPE_DIRECTIONS[pipeShape][0]
+        elif squeezingAroundPipe: # TODO: simplify
+            if PIPE_DIRECTIONS[pipeShape][0] == DIRECTION_INVERSES[directionApproachedFrom]:
+                nextDirection = DIRECTION_INVERSES[PIPE_DIRECTIONS[pipeShape][1]]
+            elif PIPE_DIRECTIONS[pipeShape][1] == DIRECTION_INVERSES[directionApproachedFrom]:
+                nextDirection = DIRECTION_INVERSES[PIPE_DIRECTIONS[pipeShape][0]]
     return nextDirection
     
-def getCoordsFromDirection(startCoords: Tuple[int, int], direction: str) -> Tuple[int, int]:
+def getCoordsFromDirection(coords: Tuple[int, int], direction: str) -> Tuple[int, int]:
     match direction:
         case "up":
-            return (startCoords[0] - 1, startCoords[1])
+            return (coords[0] - 1, coords[1])
         case "down":
-            return (startCoords[0] + 1, startCoords[1])
+            return (coords[0] + 1, coords[1])
         case "right":
-            return (startCoords[0], startCoords[1] + 1)
+            return (coords[0], coords[1] + 1)
         case "left":
-            return (startCoords[0], startCoords[1] - 1)
+            return (coords[0], coords[1] - 1)
+        
+def callFuncOnNeighbors(coords: Tuple[int, int], pipeMap: List[List[str]], 
+                   func: Callable[..., None]) -> None:
+    relativeCoords = (0, 1)
+    for _ in range(4):
+        neighbor = (coords[0] + relativeCoords[0], coords[1] + relativeCoords[1])
+        neighborIsInBounds = (neighbor[0] >= 0 and neighbor[0] < len(pipeMap) 
+                            and neighbor[1] >= 0 and neighbor[1] < len(pipeMap[0]))
+        if neighborIsInBounds:
+            func(neighbor)
+
+        relativeCoords = (relativeCoords[1], -relativeCoords[0])
         
 # Floodfills a matrix with 'X' from the borders and returns the number of tiles filled
 # Will squeeze and fill through adjacent pipe gaps
@@ -105,56 +107,44 @@ def floodFillFromBorder(pipeMap: List[List[str]], tilesToIgnore: Set[Tuple[int, 
                        [(x, 0) for x in range(1, len(pipeMap) - 1)] + 
                        [(x, len(pipeMap[0]) - 1) for x in range(1, len(pipeMap) - 1)]):
         tilesToFill = set()
-        if (pipeMap[borderTile[0]][borderTile[1]] != 'X' 
-            and borderTile not in tilesToIgnore):
+        if (pipeMap[borderTile[0]][borderTile[1]] != 'X' and borderTile not in tilesToIgnore):
             tilesToFill.add(borderTile)
         
+        def addNeighborToSet(neighbor: Tuple[int, int]) -> None:
+            if pipeMap[neighbor[0]][neighbor[1]] != 'X':
+                if neighbor in tilesToIgnore:
+                    tilesToFill.update(squeezeAroundLoop(neighbor, pipeMap, tilesToIgnore))
+                else:
+                    tilesToFill.add(neighbor)
         while tilesToFill:
             currentPipe = tilesToFill.pop()
             pipeMap[currentPipe[0]][currentPipe[1]] = 'X'
             numTilesFilled += 1
-
-            relativeCoords = (0, 1)
-            for _ in range(4):
-                neighbor = (currentPipe[0] + relativeCoords[0], currentPipe[1] + relativeCoords[1])
-                neighborIsInBounds = (neighbor[0] >= 0 and neighbor[0] < len(pipeMap) 
-                                    and neighbor[1] >= 0 and neighbor[1] < len(pipeMap[0]))
-                if neighborIsInBounds and pipeMap[neighbor[0]][neighbor[1]] != 'X':
-                    if neighbor in tilesToIgnore:
-                        tilesToFill.update(squeezeAroundLoop(neighbor, pipeMap, tilesToIgnore))
-                    else:
-                        tilesToFill.add(neighbor)
-
-                relativeCoords = (relativeCoords[1], -relativeCoords[0])
+            callFuncOnNeighbors(currentPipe, pipeMap, addNeighborToSet)
     return numTilesFilled
     
-# Returns a set of tiles that border one side of a pipe loop
+# Returns a set of tiles that border the side of the pipe loop with an 'X'
 def squeezeAroundLoop(startCoords: Tuple[int, int], pipeMap: List[List[str]], 
                       tilesToIgnore: Set[Tuple[int, int]]) -> Set[Tuple[int, int]]:
-    sideOfPipe = [startingSide(startCoords, pipeMap)] # TODO: wrap in mutable object
-    pipeShape = pipeMap[startCoords[0]][startCoords[1]]
-    # coupled to loop traversal's initial direction being PIPE_DIRECTIONS[pipe][0]
-    if sideOfPipe[0] == DIRECTION_INVERSES[PIPE_DIRECTIONS[pipeShape][0]]:
-        sideOfPipe = [getNextDirection(pipeShape, sideOfPipe[0], True)]
-    
+    sideOfPipe = startingSide(startCoords, pipeMap)
     tilesTouchingLoop = set()
     def addSqueezedNeighborsToSet(pipeCoords):
+        nonlocal sideOfPipe
         pipeShape = pipeMap[pipeCoords[0]][pipeCoords[1]]
         pipeMap[pipeCoords[0]][pipeCoords[1]] = 'X'
-        nextSide = getNextDirection(pipeShape, sideOfPipe[0], True)
+        nextSide = getNextSideOfPipe(pipeShape, sideOfPipe, True)
         if nextSide:
-            sideOfPipe[0] = nextSide
+            sideOfPipe = nextSide
         
         directionsToCheck = ()
         if pipeShape in SQUEEZE_DIRECTIONS:
-            if sideOfPipe[0] in SQUEEZE_DIRECTIONS[pipeShape]:
+            if sideOfPipe in SQUEEZE_DIRECTIONS[pipeShape]:
                 directionsToCheck = SQUEEZE_DIRECTIONS[pipeShape]
         else:
-            directionsToCheck = tuple(sideOfPipe)
+            directionsToCheck = (sideOfPipe,)
         
         for direction in directionsToCheck:
             neighbor = getCoordsFromDirection(pipeCoords, direction)
-            # TODO: make neighborIsInBounds a function
             neighborIsInBounds = (neighbor[0] >= 0 and neighbor[0] < len(pipeMap) 
                               and neighbor[1] >= 0 and neighbor[1] < len(pipeMap[0]))
             if (neighborIsInBounds and pipeMap[neighbor[0]][neighbor[1]] != 'X' 
@@ -164,19 +154,21 @@ def squeezeAroundLoop(startCoords: Tuple[int, int], pipeMap: List[List[str]],
     traversePipeLoop(startCoords, pipeMap, addSqueezedNeighborsToSet)
     return tilesTouchingLoop
 
-###############################TODO: Merge neighbor checking with findAndReplaceStart and floodFill
-def startingSide(startCoords: Tuple[int, int], pipeMap: List[List[str]]) -> Tuple[str, str]:
-    relativeCoords, diagIndex = (0, 1), 0 #----------- TODO: rename diagIndex
-    for _ in range(4):
-        neighbor = (startCoords[0] + relativeCoords[0], startCoords[1] + relativeCoords[1])
-        neighborIsInBounds = (neighbor[0] >= 0 and neighbor[0] < len(pipeMap) 
-                              and neighbor[1] >= 0 and neighbor[1] < len(pipeMap[0]))
-        if neighborIsInBounds and pipeMap[neighbor[0]][neighbor[1]] == 'X':
-            return DIRECTIONS[diagIndex]
+# Returns the side of the pipe in the pipe loop that the loop was approached from
+def startingSide(coords: Tuple[int, int], pipeMap: List[List[str]]) -> Tuple[str, str]:
+    side, dirIndex = DIRECTIONS[-1], 0
+    def findSideWithX(neighbor: Tuple[int, int]) -> None:
+        nonlocal side, dirIndex
+        if pipeMap[neighbor[0]][neighbor[1]] == 'X':
+            side = DIRECTIONS[dirIndex]
+        dirIndex += 1
+    callFuncOnNeighbors(coords, pipeMap, findSideWithX)
 
-        relativeCoords = (relativeCoords[1], -relativeCoords[0])
-        diagIndex += 1
-    return DIRECTIONS[-1]
+    pipeShape = pipeMap[coords[0]][coords[1]]
+    # coupled to loop traversal's initial direction being PIPE_DIRECTIONS[pipe][0]
+    if side == DIRECTION_INVERSES[PIPE_DIRECTIONS[pipeShape][0]]:
+        side = getNextSideOfPipe(pipeShape, side, True)
+    return side
 
 
 ################################ TESTING #################################
